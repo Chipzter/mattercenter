@@ -1,8 +1,8 @@
 ﻿(function () {
     'use strict;'
     var app = angular.module("matterMain");
-    app.controller('MatterDashBoardController', ['$scope', '$state', '$interval', '$stateParams', 'api', '$timeout', 'matterDashBoardResource', '$rootScope', 'uiGridConstants', '$location', '$http', '$q', '$filter', 'commonFunctions', '$window',
-        function matterDashBoardController($scope, $state, $interval, $stateParams, api, $timeout, matterDashBoardResource, $rootScope, uiGridConstants, $location, $http, $q, $filter, commonFunctions, $window) {
+    app.controller('MatterDashBoardController', ['$scope', '$state', '$interval', '$stateParams', 'api', '$timeout', 'matterDashBoardResource', '$rootScope', 'uiGridConstants', '$location', '$http', '$q', '$filter', 'commonFunctions', '$window', 'adalAuthenticationService',
+        function matterDashBoardController($scope, $state, $interval, $stateParams, api, $timeout, matterDashBoardResource, $rootScope, uiGridConstants, $location, $http, $q, $filter, commonFunctions, $window, adalService) {
             var vm = this;
             vm.selectedRow = {
                 matterClientUrl: '',
@@ -192,7 +192,7 @@
                 }
 
             });
-
+            vm.loginUser = adalService.userInfo.userName;
             columnDefs1.push({
                 field: 'pin',
                 displayName: '',
@@ -205,7 +205,7 @@
                 field: 'upload',
                 displayName: '',
                 width: '60',
-                cellTemplate: '<div class="ui-grid-cell-contents pad0"><img title="upload" src="../Images/upload-666.png" ng-click="grid.appScope.vm.Openuploadmodal(row.entity.matterName,row.entity.matterClientUrl,row.entity.matterGuid)"/></div>',
+                cellTemplate: '<div class="ui-grid-cell-contents pad0" showupload loginuser="' + vm.loginUser + '" hideupload={{row.entity.hideUpload}}><img title="upload" class="hideUploadImg" src="../Images/upload-666.png"/><img title="upload" class="showUploadImg" src="../Images/upload-666.png" ng-click="grid.appScope.vm.Openuploadmodal(row.entity.matterName,row.entity.matterClientUrl,row.entity.matterGuid)"/></div>',
                 enableColumnMenu: false,
                 position: 76
             });
@@ -438,8 +438,8 @@
                 vm.selectedAOLs = "";
                 vm.selectedSubAOLs = "";
                 vm.selectedClients = "";
-                vm.startdate = "";
-                vm.enddate = "";
+                vm.startDate = "";
+                vm.endDate = "";
                 vm.searchText = "";
                 angular.element("input[name='practiceGroup']:checkbox").prop('checked', false);
                 angular.element("input[name='clients']:checkbox").prop('checked', false);
@@ -907,17 +907,20 @@
                 formatYear: 'yy',
                 maxDate: new Date()
             };
-            vm.enddateOptions = {
+            vm.endDateOptions = {
                 formatYear: 'yy',
                 maxDate: new Date()
             }
-            $scope.$watch('vm.startdate', function (newval, oldval) {
-                vm.enddateOptions.minDate = newval;
+            $scope.$watch('vm.startDate', function (newval, oldval) {
+                vm.endDateOptions.minDate = newval;
             });
             vm.openStartDate = function ($event) {
                 if ($event) {
                     $event.preventDefault();
                     $event.stopPropagation();
+                }
+                if (vm.endDate !== '' && vm.endDate !== undefined) {
+                    vm.dateOptions.maxDate = vm.endDate;
                 }
                 vm.openedStartDate = vm.openedStartDate ? false : true;
                 vm.openedEndDate = false;
@@ -932,6 +935,51 @@
             };
             vm.openedStartDate = false;
             vm.openedEndDate = false;
+
+            vm.changeOnCreateDate = function ($event) {
+                if ($event.keyCode == '13' || $event.keyCode == '9') {
+
+                    var modelValue = $event.target.attributes['ng-model'].value;
+
+                    if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test($event.target.value)) {
+                        if (modelValue == 'vm.startDate') {
+                            vm.startDate = new Date();
+                            $event.target.value = vm.startDate;
+                        } else {
+                            vm.endDate = new Date();
+                            $event.target.value = vm.endDate;
+                        }
+                    }
+                    else {
+                        var parts = $event.target.value.split("/");
+                        var day = parseInt(parts[1], 10);
+                        var month = parseInt(parts[0], 10);
+                        var year = parseInt(parts[2], 10);
+                        if (modelValue == 'vm.startDate') {
+                            if (vm.endDate !== '' && new Date(year, month - 1, day) > vm.endDate) {
+                                vm.startDate = vm.endDate;
+                                vm.dateOptions.maxDate = vm.startDate;
+                            }
+                            else if (new Date(year, month - 1, day) > vm.dateOptions.maxDate && new Date(year, month - 1, day) <= new Date()) {
+                                vm.startDate = new Date(year, month - 1, day);
+                                vm.endDate = vm.startDate;
+                                vm.dateOptions.maxDate = vm.startDate;
+                            }
+                            else if (new Date(year, month - 1, day) > new Date() && vm.dateOptions.maxDate <= new Date()) {
+                                vm.startDate = vm.dateOptions.maxDate;
+                                $event.target.value = vm.startDate;
+                            } else if (new Date(year, month - 1, day) > new Date()) {
+                                vm.startDate = new Date();
+                                vm.dateOptions.maxDate = vm.startDate;
+                                $event.target.value = vm.startDate;
+                            }
+                        } else if (modelValue == 'vm.endDate' && new Date(year, month - 1, day) > new Date()) {
+                            vm.endDate = new Date();
+                            $event.target.value = vm.endDate;
+                        }
+                    }
+                }
+            };
             //#endregion
 
             //#region showing and hiding client dropdown
@@ -2087,11 +2135,11 @@
                 else {
                     jsonMatterSearchRequest.SearchObject.Filters.SubareaOfLaw = "";
                 }
-                if (vm.startdate != "" && vm.startdate != undefined) {
-                    startdate = $filter('date')(vm.startdate, "yyyy-MM-ddT00:00:00") + "Z";
+                if (vm.startDate != "" && vm.startDate != undefined) {
+                    startdate = $filter('date')(vm.startDate, "yyyy-MM-ddT00:00:00") + "Z";
                 }
-                if (vm.enddate != "" && vm.enddate != undefined) {
-                    enddate = $filter('date')(vm.enddate, "yyyy-MM-ddT23:59:59") + "Z";
+                if (vm.endDate != "" && vm.endDate != undefined) {
+                    enddate = $filter('date')(vm.endDate, "yyyy-MM-ddT23:59:59") + "Z";
                 }
                 if (vm.selected == "") {
                     jsonMatterSearchRequest.SearchObject.SearchTerm = "";
